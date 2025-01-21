@@ -1,0 +1,6 @@
+streamlit
+langchain
+ollama
+pydantic
+unstructured[all-docs]
+tabulate
