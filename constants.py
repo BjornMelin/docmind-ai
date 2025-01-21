@@ -1,28 +1,8 @@
-"""
-Application constants and configuration values.
-
-This module contains all constant values, default configurations, 
-and lookup dictionaries used throughout the application.
-"""
-
-from langchain.document_loaders import (
-    PyPDFLoader,
-    UnstructuredWordDocumentLoader,
-    TextLoader,
-    UnstructuredExcelLoader,
-    UnstructuredMarkdownLoader,
-    JSONLoader,
-    UnstructuredXMLLoader,
-    UnstructuredRTFLoader,
-    CSVLoader,
-    UnstructuredEmailLoader,
-    UnstructuredPowerPointLoader,
-    UnstructuredODTLoader,
-    UnstructuredEPubLoader,
-)
+from typing import Dict, Union, Type
+from langchain_community.document_loaders.base import BaseLoader
 
 # --- Prompt Configuration ---
-DEFAULT_PROMPTS = {
+DEFAULT_PROMPTS: Dict[str, str] = {
     "Comprehensive Document Analysis": (
         "Analyze this document to provide a concise summary, identify key insights, "
         "list actionable items, and highlight any open questions. {tone_instructions} "
@@ -41,11 +21,11 @@ DEFAULT_PROMPTS = {
         "further investigation. {tone_instructions} {custom_instructions} {length_instructions} "
         "Format your response as a JSON object with 'summary' and 'open_questions' keys as "
         "instructed by the following schema:\n{format_instructions}"
-    )
+    ),
 }
 
 # --- Tone Options ---
-TONE_OPTIONS = {
+TONE_OPTIONS: Dict[str, str] = {
     "Professional": "Maintain a professional and objective tone.",
     "Academic": "Use an academic and formal tone, appropriate for scholarly research.",
     "Informal": "Adopt an informal and conversational tone.",
@@ -59,7 +39,7 @@ TONE_OPTIONS = {
 }
 
 # --- Instruction Options ---
-INSTRUCTION_OPTIONS = {
+INSTRUCTION_OPTIONS: Dict[str, str] = {
     "General Assistant": "Act as a general-purpose assistant.",
     "Researcher": "Focus on in-depth research and analysis, providing detailed explanations and citations where appropriate.",
     "Software Engineer": "Tailor your responses to a software engineer, focusing on technical details, code quality, and system design.",
@@ -73,7 +53,7 @@ INSTRUCTION_OPTIONS = {
 }
 
 # --- Length/Detail Options ---
-LENGTH_OPTIONS = {
+LENGTH_OPTIONS: Dict[str, str] = {
     "Concise": "Provide a brief and to-the-point response.",
     "Detailed": "Provide a thorough and comprehensive response, with detailed explanations and examples.",
     "Comprehensive": "Provide a comprehensive response including any necessary details.",
@@ -81,27 +61,53 @@ LENGTH_OPTIONS = {
 }
 
 # --- File Handling Configuration ---
-FILE_LOADER_MAP = {
-    "pdf": PyPDFLoader,
-    "docx": UnstructuredWordDocumentLoader,
-    "txt": TextLoader,
-    "xlsx": UnstructuredExcelLoader,
-    "md": UnstructuredMarkdownLoader,
-    "json": JSONLoader,
-    "xml": UnstructuredXMLLoader,
-    "rtf": UnstructuredRTFLoader,
-    "csv": CSVLoader,
-    "msg": UnstructuredEmailLoader,
-    "pptx": UnstructuredPowerPointLoader,
-    "odt": UnstructuredODTLoader,
-    "epub": UnstructuredEPubLoader,
+FILE_LOADER_MAP: Dict[str, Union[Type[BaseLoader], str]] = {
+    "pdf": "PyPDFLoader",
+    "docx": "UnstructuredWordDocumentLoader",
+    "txt": "TextLoader",
+    "xlsx": "UnstructuredExcelLoader",
+    "md": "UnstructuredMarkdownLoader",
+    "json": "JSONLoader",
+    "xml": "UnstructuredXMLLoader",
+    "rtf": "UnstructuredRTFLoader",
+    "csv": "CSVLoader",
+    "msg": "UnstructuredEmailLoader",
+    "pptx": "UnstructuredPowerPointLoader",
+    "odt": "UnstructuredODTLoader",
+    "epub": "UnstructuredEPubLoader",
 }
 
-SUPPORTED_FILE_TYPES = [
-    "pdf", "docx", "txt", "xlsx", "md", "json", "xml", "rtf", "csv", "msg",
-    "pptx", "odt", "epub", "py", "js", "java", "ts", "tsx", "c", "cpp", "h"
+SUPPORTED_FILE_TYPES: list[str] = [
+    "pdf",
+    "docx",
+    "txt",
+    "xlsx",
+    "md",
+    "json",
+    "xml",
+    "rtf",
+    "csv",
+    "msg",
+    "pptx",
+    "odt",
+    "epub",
+    "py",
+    "js",
+    "java",
+    "ts",
+    "tsx",
+    "c",
+    "cpp",
+    "h",
 ]
 
-SUPPORTED_CODE_FILE_TYPES = [
-    "py", "js", "java", "ts", "tsx", "c", "cpp", "h"
+SUPPORTED_CODE_FILE_TYPES: list[str] = [
+    "py",
+    "js",
+    "java",
+    "ts",
+    "tsx",
+    "c",
+    "cpp",
+    "h",
 ]

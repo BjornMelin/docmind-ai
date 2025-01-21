@@ -1,9 +1,5 @@
-"""
-Defines Pydantic models for structured output parsing and schema definitions.
-"""
-
+from langchain.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field
-from langchain.output_parsers.pydantic import PydanticOutputParser
 
 
 class DocumentAnalysis(BaseModel):

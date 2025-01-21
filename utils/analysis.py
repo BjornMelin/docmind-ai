@@ -6,16 +6,17 @@ This module handles the setup and execution of the LangChain analysis pipeline.
 
 from langchain.chains.summarize import load_summarize_chain
 from langchain.prompts import PromptTemplate
-from typing import Optional
+from typing import Optional, List
 import streamlit as st
 from langchain_core.language_models.base import BaseLanguageModel
+from langchain_core.documents import Document
 
 from schemas import output_parser
 from constants import DEFAULT_PROMPTS, TONE_OPTIONS, LENGTH_OPTIONS, INSTRUCTION_OPTIONS
 
 
 def analyze_documents(
-    docs: list,
+    docs: List[Document],
     prompt_template: str,
     llm: BaseLanguageModel,
     selected_tone: str,
@@ -45,13 +46,15 @@ def analyze_documents(
         length_instructions = LENGTH_OPTIONS.get(selected_length, "")
         instruction = INSTRUCTION_OPTIONS.get(selected_instruction, "")
 
+        prompt = prompt_template.format(
+            format_instructions=output_parser.get_format_instructions(),
+            tone_instructions=tone_instructions,
+            custom_instructions=f"{instruction} {custom_instructions or ''}",
+            length_instructions=length_instructions,
+        )
+
         final_prompt = PromptTemplate(
-            template=prompt_template.format(
-                format_instructions=output_parser.get_format_instructions(),
-                tone_instructions=tone_instructions,
-                custom_instructions=f"{instruction} {custom_instructions or ''}",
-                length_instructions=length_instructions,
-            ),
+            template=prompt,
             input_variables=["text"],
         )
 
@@ -62,7 +65,7 @@ def analyze_documents(
             map_prompt=final_prompt,
             combine_prompt=final_prompt,
         )
-        return chain.run(docs)
+        return chain.invoke(docs)
 
     except Exception as e:
         st.error(f"Analysis pipeline error: {str(e)}")
