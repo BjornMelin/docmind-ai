@@ -1,39 +1,21 @@
-import streamlit as st
-from langchain.chat_models import ChatOllama
-from langchain.chains.summarize import load_summarize_chain
-from langchain.document_loaders import (
-    PyPDFLoader,
-    Docx2Loader,
-    TextLoader,
-    UnstructuredExcelLoader,
-    UnstructuredMarkdownLoader,
-    JSONLoader,
-    UnstructuredXMLLoader,
-    UnstructuredRTFLoader,
-    CSVLoader,
-    UnstructuredEmailLoader,
-    UnstructuredPowerPointLoader,
-    UnstructuredODTLoader,
-    UnstructuredEPubLoader,
-)
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.prompts import PromptTemplate
-from langchain.pydantic_v1 import BaseModel, Field
-from langchain.output_parsers import PydanticOutputParser
 import os
+import streamlit as st
+from langchain_ollama import ChatOllama
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from schemas import output_parser
+from constants import (
+    DEFAULT_PROMPTS,
+    TONE_OPTIONS,
+    INSTRUCTION_OPTIONS,
+    LENGTH_OPTIONS,
+    SUPPORTED_FILE_TYPES,
+)
+from utils.document_loader import load_document
+from utils.analysis import analyze_documents
+import logging
 
-
-# --- Pydantic Model for Structured Output ---
-class DocumentAnalysis(BaseModel):
-    summary: str = Field(description="A concise summary of the document.")
-    key_insights: list[str] = Field(description="Key insights or takeaways.")
-    action_items: list[str] = Field(description="A list of actionable items.")
-    open_questions: list[str] = Field(
-        description="A list of open questions or areas for further investigation."
-    )
-
-
-output_parser = PydanticOutputParser(pydantic_object=DocumentAnalysis)
+# Configure logging at the start of the application
+logging.basicConfig(level=logging.INFO)
 
 # --- Streamlit Configuration ---
 st.set_page_config(
@@ -46,7 +28,32 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-        /* ... (same CSS as before) ... */
+        .stApp {
+            background-color: #f0f2f6;
+        }
+        .stTextInput > label {
+            color: #333;
+        }
+        .stTextArea > label {
+            color: #333;
+        }
+        .stButton > button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 10px 20px;
+            cursor: pointer;
+        }
+        .stButton > button:hover {
+            background-color: #0056b3;
+        }
+        .stSelectbox > label {
+            color: #333;
+        }
+        .stFileUploader > label {
+            color: #333;
+        }
     </style>
     """,
     unsafe_allow_html=True,
@@ -69,54 +76,24 @@ ollama_base_url = st.text_input(
     "Ollama Base URL", value="http://localhost:11434", help="Ollama server address."
 )
 model_name = st.text_input(
-    "Ollama Model Name", value="llama2", help="Name of the Ollama model."
+    "Ollama Model Name", value="llama3.3", help="Name of the Ollama model."
 )
 
 uploaded_files = st.file_uploader(
     "Upload Documents (PDF, DOCX, TXT, XLSX, MD, JSON, XML, RTF, CSV, MSG, PPTX, ODT, EPUB, ...)",
-    type=[
-        "pdf",
-        "docx",
-        "txt",
-        "xlsx",
-        "md",
-        "json",
-        "xml",
-        "rtf",
-        "csv",
-        "msg",
-        "pptx",
-        "odt",
-        "epub",
-        "py",
-        "js",
-        "java",
-        "ts",
-        "tsx",
-        "c",
-        "cpp",
-        "h",
-    ],
+    type=SUPPORTED_FILE_TYPES,
     accept_multiple_files=True,
     help="Upload files for analysis.",
 )
 
-llm = ChatOllama(base_url=ollama_base_url, model=model_name)
+llm = ChatOllama(model=model_name, base_url=ollama_base_url)
 
-# --- Default Prompts ---
-default_prompts = {
-    "Comprehensive Document Analysis": """Analyze this document to provide a concise summary, identify key insights, list actionable items, and highlight any open questions. {tone_instructions} {custom_instructions} {length_instructions} Format your response as a JSON object with "summary", "key_insights", "action_items", and "open_questions" keys as instructed by the following schema:
-    {format_instructions}""",
-    "Extract Key Insights and Action Items": """Identify the key insights and actionable items from this document. {tone_instructions} {custom_instructions} {length_instructions} Format your response as a JSON object with "key_insights" and "action_items" keys as instructed by the following schema:
-    {format_instructions}""",
-    "Summarize and Identify Open Questions": """Provide a summary of the document and list any open questions or areas requiring further investigation. {tone_instructions} {custom_instructions} {length_instructions} Format your response as a JSON object with "summary" and "open_questions" keys as instructed by the following schema:
-    {format_instructions}""",
-    "Custom Prompt": None,
-}
+# Add "Custom Prompt" to default prompts
+prompts = {**DEFAULT_PROMPTS, "Custom Prompt": None}
 
 selected_prompt_name = st.selectbox(
     "Select Analysis Prompt",
-    list(default_prompts.keys()),
+    list(prompts.keys()),
     help="Choose a default prompt or use a custom one.",
 )
 
@@ -128,40 +105,14 @@ if selected_prompt_name == "Custom Prompt":
     )
 
 # --- Tone Selection ---
-tone_options = {
-    "Professional": "Maintain a professional and objective tone.",
-    "Academic": "Use an academic and formal tone, appropriate for scholarly research.",
-    "Informal": "Adopt an informal and conversational tone.",
-    "Creative": "Be creative and imaginative in your response.",
-    "Neutral": "Maintain a neutral tone, avoiding any strong opinions or biases.",
-    "Direct": "Be direct and to-the-point, avoiding unnecessary elaboration.",
-    "Empathetic": "Respond with empathy and understanding, suitable for sensitive topics.",
-    "Humorous": "Incorporate humor and wit where appropriate.",
-    "Authoritative": "Sound confident and authoritative in your response.",
-    "Inquisitive": "Adopt an inquisitive tone, focusing on exploration and questioning.",
-}
-
 selected_tone = st.selectbox(
     "Select Tone",
-    list(tone_options.keys()),
+    list(TONE_OPTIONS.keys()),
     help="Choose the desired tone for the analysis.",
 )
 
 # --- Persona/Instruction Selection ---
-instruction_options = {
-    "General Assistant": "Act as a general-purpose assistant.",
-    "Researcher": "Focus on in-depth research and analysis, providing detailed explanations and citations where appropriate.",
-    "Software Engineer": "Tailor your responses to a software engineer, focusing on technical details, code quality, and system design.",
-    "Product Manager": "Act as a product manager, considering market needs, product strategy, and user experience.",
-    "Data Scientist": "Respond as a data scientist, emphasizing data analysis, statistical significance, and model accuracy.",
-    "Business Analyst": "Provide analysis from a business perspective, considering profitability, market trends, and strategic implications.",
-    "Technical Writer": "Focus on clear and concise documentation, suitable for technical manuals and user guides.",
-    "Marketing Specialist": "Tailor your responses to marketing concerns, such as branding, customer engagement, and market positioning.",
-    "HR Manager": "Respond with a focus on human resources considerations, such as employee well-being, recruitment, and training.",
-    "Legal Advisor": "Provide information with a legal perspective, focusing on compliance, regulations, and potential legal issues.",
-    "Custom Instructions": None,
-}
-
+instruction_options = {**INSTRUCTION_OPTIONS, "Custom Instructions": None}
 selected_instruction = st.selectbox(
     "Select Instructions",
     list(instruction_options.keys()),
@@ -176,16 +127,9 @@ if selected_instruction == "Custom Instructions":
     )
 
 # --- Length/Detail Selection ---
-length_options = {
-    "Concise": "Provide a brief and to-the-point response.",
-    "Detailed": "Provide a thorough and comprehensive response, with detailed explanations and examples.",
-    "Comprehensive": "Provide a comprehensive response including any necessary details.",
-    "Bullet Points": "Provide your response in bullet point format.",
-}
-
 selected_length = st.selectbox(
     "Select Desired Length/Detail",
-    list(length_options.keys()),
+    list(LENGTH_OPTIONS.keys()),
     help="Choose the desired length or level of detail for the analysis.",
 )
 
@@ -196,70 +140,8 @@ analysis_mode = st.radio(
     help="Choose whether to analyze documents individually or together.",
 )
 
-
-# --- Functions ---
-def load_document(file):
-    file_extension = file.name.split(".")[-1].lower()
-    if file_extension == "pdf":
-        return PyPDFLoader(file_path=file.name)
-    elif file_extension == "docx":
-        return Docx2Loader(file_path=file.name)
-    elif file_extension == "txt":
-        return TextLoader(file_path=file.name)
-    elif file_extension == "xlsx":
-        return UnstructuredExcelLoader(file_path=file.name)
-    elif file_extension == "md":
-        return UnstructuredMarkdownLoader(file_path=file.name)
-    elif file_extension == "json":
-        return JSONLoader(file_path=file.name, jq_schema=".")
-    elif file_extension == "xml":
-        return UnstructuredXMLLoader(file_path=file.name)
-    elif file_extension == "rtf":
-        return UnstructuredRTFLoader(file_path=file.name)
-    elif file_extension == "csv":
-        return CSVLoader(file_path=file.name)
-    elif file_extension == "msg":
-        return UnstructuredEmailLoader(file_path=file.name)
-    elif file_extension == "pptx":
-        return UnstructuredPowerPointLoader(file_path=file.name)
-    elif file_extension == "odt":
-        return UnstructuredODTLoader(file_path=file.name)
-    elif file_extension == "epub":
-        return UnstructuredEPubLoader(file_path=file.name)
-    elif file_extension in ["py", "js", "java", "ts", "tsx", "c", "cpp", "h"]:
-        return TextLoader(file_path=file.name)
-    raise ValueError(f"Unsupported file type: {file_extension}")
-
-
-def analyze_documents(docs, prompt_template):
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-    split_docs = text_splitter.split_documents(docs)
-
-    # Construct the final prompt using the selected tone and instructions
-    tone_instructions = tone_options[selected_tone]
-    length_instructions = length_options[selected_length]
-    instruction = instruction_options[selected_instruction]
-
-    prompt = prompt_template.format(
-        format_instructions=output_parser.get_format_instructions(),
-        tone_instructions=f" {tone_instructions}",
-        custom_instructions=f" {instruction} {custom_instructions if custom_instructions else ''}",
-        length_instructions=f" {length_instructions}",
-    )
-
-    final_prompt = PromptTemplate(
-        template=prompt,
-        input_variables=["text"],
-    )
-
-    chain = load_summarize_chain(
-        llm,
-        chain_type="map_reduce",
-        map_prompt=final_prompt,
-        combine_prompt=final_prompt,
-    )
-    return chain.run(split_docs)
-
+# --- Text Splitting Configuration ---
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
 
 # --- Main Application ---
 if uploaded_files:
@@ -276,9 +158,18 @@ if uploaded_files:
                         prompt_to_use = (
                             custom_prompt
                             if selected_prompt_name == "Custom Prompt"
-                            else default_prompts[selected_prompt_name]
+                            else prompts[selected_prompt_name]
                         )
-                        output = analyze_documents(documents, prompt_to_use)
+                        split_docs = text_splitter.split_documents(documents)
+                        output = analyze_documents(
+                            split_docs,
+                            prompt_to_use,
+                            llm,
+                            selected_tone,
+                            selected_instruction,
+                            selected_length,
+                            custom_instructions,
+                        )
                         try:
                             parsed_output = output_parser.parse(output)
                             st.subheader(f"Analysis of {file.name}")
@@ -316,6 +207,7 @@ if uploaded_files:
                     loader = load_document(file)
                     all_docs.extend(loader.load())
                 except Exception as e:
+                    logging.error(f"Error loading {file.name}: {e}")
                     st.error(f"Error loading {file.name}: {e}")
                 # Clean up temporary file
                 os.remove(file.name)
@@ -324,9 +216,18 @@ if uploaded_files:
                 prompt_to_use = (
                     custom_prompt
                     if selected_prompt_name == "Custom Prompt"
-                    else default_prompts[selected_prompt_name]
+                    else prompts[selected_prompt_name]
                 )
-                output = analyze_documents(all_docs, prompt_to_use)
+                split_docs = text_splitter.split_documents(all_docs)
+                output = analyze_documents(
+                    split_docs,
+                    prompt_to_use,
+                    llm,
+                    selected_tone,
+                    selected_instruction,
+                    selected_length,
+                    custom_instructions,
+                )
                 try:
                     parsed_output = output_parser.parse(output)
                     st.subheader("Combined Analysis of All Documents")
