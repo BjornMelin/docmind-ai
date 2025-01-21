@@ -30,6 +30,20 @@ st.set_page_config(
     layout="wide",
 )
 
+def check_ollama():
+    try:
+        response = requests.get("http://localhost:11434/api/tags")
+        if response.status_code != 200:
+            st.error("❌ Cannot connect to Ollama. Please make sure Ollama is running.")
+            st.stop()
+    except Exception as e:
+        st.error("❌ Cannot connect to Ollama. Please make sure Ollama is running.")
+        st.error(f"Error: {str(e)}")
+        st.stop()
+
+# Add this after your st.set_page_config
+check_ollama()
+
 # Custom CSS for styling
 st.markdown(
     """
