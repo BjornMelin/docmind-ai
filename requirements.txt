@@ -1,6 +1,7 @@
 streamlit
 langchain
 ollama
+langchain-ollama
 pydantic
 unstructured[all-docs]
 tabulate
